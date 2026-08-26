@@ -5,6 +5,36 @@ const statusElement = document.getElementById("status");
 const form = document.getElementById("produtoForm");
 const mensagem = document.getElementById("mensagem");
 
+function escapar(texto) {
+  const div = document.createElement("div");
+  div.textContent = String(texto ?? "");
+  return div.innerHTML;
+}
+
+async function movimentarEstoque(produtoId, formulario) {
+  const retorno = formulario.querySelector(".movement-message");
+  const dados = Object.fromEntries(new FormData(formulario));
+  dados.quantidade = Number(dados.quantidade);
+
+  try {
+    const response = await fetch(API + "/produtos/" + produtoId + "/movimentacoes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados)
+    });
+    const resultado = await response.json();
+    if (!response.ok) throw new Error(resultado.erro || "Erro ao movimentar estoque");
+
+    retorno.textContent = resultado.mensagem + ". Novo estoque: " + resultado.produto.estoque;
+    retorno.className = "movement-message success";
+    formulario.reset();
+    await Promise.all([carregarProdutos(), carregarHistorico()]);
+  } catch (error) {
+    retorno.textContent = error.message;
+    retorno.className = "movement-message error";
+  }
+}
+
 async function carregarProdutos() {
 
   try {
@@ -58,7 +88,7 @@ async function carregarProdutos() {
       card.className = "product";
 
       card.innerHTML = `
-        <h3>${produto.nome}</h3>
+        <h3>${escapar(produto.nome)}</h3>
 
         <div class="price">
           R$ ${Number(produto.preco).toFixed(2)}
@@ -73,7 +103,26 @@ async function carregarProdutos() {
           Estoque mínimo:
           ${produto.estoque_minimo}
         </div>
+
+        <form class="movement-form">
+          <label>Movimentar estoque</label>
+          <div class="movement-grid">
+            <select name="tipo" aria-label="Tipo de movimentação">
+              <option value="ENTRADA">Entrada</option>
+              <option value="SAIDA">Saída</option>
+            </select>
+            <input name="quantidade" type="number" min="1" value="1" required aria-label="Quantidade">
+          </div>
+          <input name="motivo" maxlength="200" placeholder="Motivo (ex.: venda ou produção)">
+          <button class="button primary" type="submit">Confirmar movimentação</button>
+          <p class="movement-message" aria-live="polite"></p>
+        </form>
       `;
+
+      card.querySelector(".movement-form").addEventListener("submit", event => {
+        event.preventDefault();
+        movimentarEstoque(produto.id, event.currentTarget);
+      });
 
       lista.appendChild(card);
 
@@ -130,10 +179,10 @@ async function carregarHistorico() {
 
       div.innerHTML = `
         <div>
-          <strong>${mov.produto}</strong>
+          <strong>${escapar(mov.produto)}</strong>
 
           <div>
-            ${mov.motivo || ""}
+            ${escapar(mov.motivo || "")}
           </div>
 
           ${
