@@ -14,10 +14,11 @@ function escapar(texto) {
 async function movimentarEstoque(produtoId, formulario) {
   const retorno = formulario.querySelector(".movement-message");
   const dados = Object.fromEntries(new FormData(formulario));
+  dados.produto_id = produtoId;
   dados.quantidade = Number(dados.quantidade);
 
   try {
-    const response = await fetch(API + "/produtos/" + produtoId + "/movimentacoes", {
+    const response = await fetch(API + "/estoque/movimentacao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(dados)
@@ -25,7 +26,7 @@ async function movimentarEstoque(produtoId, formulario) {
     const resultado = await response.json();
     if (!response.ok) throw new Error(resultado.erro || "Erro ao movimentar estoque");
 
-    retorno.textContent = resultado.mensagem + ". Novo estoque: " + resultado.produto.estoque;
+    retorno.textContent = resultado.mensagem + " Novo estoque: " + resultado.estoque_atual;
     retorno.className = "movement-message success";
     formulario.reset();
     await Promise.all([carregarProdutos(), carregarHistorico()]);
@@ -36,74 +37,35 @@ async function movimentarEstoque(produtoId, formulario) {
 }
 
 async function carregarProdutos() {
-
   try {
-
     const response = await fetch(`${API}/produtos`);
-
-    if (!response.ok) {
-      throw new Error("Erro ao consultar API");
-    }
+    if (!response.ok) throw new Error("Erro ao consultar API");
 
     const produtos = await response.json();
-
     lista.innerHTML = "";
+    document.getElementById("totalProdutos").textContent = produtos.length;
 
-    document.getElementById("totalProdutos").textContent =
-      produtos.length;
+    const estoqueTotal = produtos.reduce((total, produto) => total + Number(produto.estoque), 0);
+    const estoqueBaixo = produtos.filter(produto => Number(produto.estoque) <= Number(produto.estoque_minimo));
 
-    const estoqueTotal = produtos.reduce(
-      (total, produto) =>
-        total + Number(produto.estoque),
-      0
-    );
-
-    const estoqueBaixo = produtos.filter(
-      produto =>
-        Number(produto.estoque) <=
-        Number(produto.estoque_minimo)
-    );
-
-    document.getElementById("estoqueTotal").textContent =
-      estoqueTotal;
-
-    document.getElementById("estoqueBaixo").textContent =
-      estoqueBaixo.length;
+    document.getElementById("estoqueTotal").textContent = estoqueTotal;
+    document.getElementById("estoqueBaixo").textContent = estoqueBaixo.length;
 
     if (produtos.length === 0) {
-
-      statusElement.textContent =
-        "Nenhum produto cadastrado.";
-
+      statusElement.textContent = "Nenhum produto cadastrado.";
       return;
     }
 
-    statusElement.textContent =
-      `${produtos.length} produto(s) encontrado(s).`;
+    statusElement.textContent = `${produtos.length} produto(s) encontrado(s).`;
 
     produtos.forEach(produto => {
-
       const card = document.createElement("article");
-
       card.className = "product";
-
       card.innerHTML = `
         <h3>${escapar(produto.nome)}</h3>
-
-        <div class="price">
-          R$ ${Number(produto.preco).toFixed(2)}
-        </div>
-
-        <div class="stock">
-          Estoque:
-          <strong>${produto.estoque}</strong>
-        </div>
-
-        <div class="stock">
-          Estoque mínimo:
-          ${produto.estoque_minimo}
-        </div>
-
+        <div class="price">R$ ${Number(produto.preco).toFixed(2)}</div>
+        <div class="stock">Estoque: <strong>${produto.estoque}</strong></div>
+        <div class="stock">Estoque mínimo: ${produto.estoque_minimo}</div>
         <form class="movement-form">
           <label>Movimentar estoque</label>
           <div class="movement-grid">
@@ -123,172 +85,79 @@ async function carregarProdutos() {
         event.preventDefault();
         movimentarEstoque(produto.id, event.currentTarget);
       });
-
       lista.appendChild(card);
-
     });
-
   } catch (error) {
-
     console.error(error);
-
-    statusElement.textContent =
-      "Não foi possível conectar com o backend.";
+    statusElement.textContent = "Não foi possível conectar com o backend.";
   }
 }
 
 async function carregarHistorico() {
-
-  const container =
-    document.getElementById("historicoLista");
-
+  const container = document.getElementById("historicoLista");
   try {
+    const response = await fetch(`${API}/movimentacoes`);
+    if (!response.ok) throw new Error();
 
-    const response =
-      await fetch(`${API}/movimentacoes`);
-
-    if (!response.ok) {
-      throw new Error();
-    }
-
-    const movimentacoes =
-      await response.json();
-
+    const movimentacoes = await response.json();
     container.innerHTML = "";
 
     if (movimentacoes.length === 0) {
-
-      container.textContent =
-        "Nenhuma movimentação registrada.";
-
+      container.textContent = "Nenhuma movimentação registrada.";
       return;
     }
 
     movimentacoes.forEach(mov => {
-
-      const div =
-        document.createElement("div");
-
-      div.className =
-        "history-item";
-
-      const tipoClasse =
-        mov.tipo === "ENTRADA"
-          ? "entry"
-          : "exit";
-
+      const div = document.createElement("div");
+      div.className = "history-item";
+      const tipoClasse = mov.tipo === "ENTRADA" ? "entry" : "exit";
       div.innerHTML = `
         <div>
           <strong>${escapar(mov.produto)}</strong>
-
-          <div>
-            ${escapar(mov.motivo || "")}
-          </div>
-
-          ${
-            mov.pedido_id
-              ? `<small>Pedido #${mov.pedido_id}</small>`
-              : ""
-          }
+          <div>${escapar(mov.motivo || "")}</div>
+          ${mov.pedido_id ? `<small>Pedido #${mov.pedido_id}</small>` : ""}
         </div>
-
         <div class="${tipoClasse}">
-          <strong>
-            ${mov.tipo}
-          </strong>
-
-          <div>
-            ${mov.quantidade} unidade(s)
-          </div>
-
-          <small>
-            ${mov.estoque_anterior}
-            →
-            ${mov.estoque_posterior}
-          </small>
+          <strong>${mov.tipo}</strong>
+          <div>${mov.quantidade} unidade(s)</div>
+          <small>${mov.estoque_anterior} → ${mov.estoque_posterior}</small>
         </div>
       `;
-
       container.appendChild(div);
-
     });
-
   } catch (error) {
-
-    container.textContent =
-      "Erro ao carregar histórico.";
+    container.textContent = "Erro ao carregar histórico.";
   }
 }
 
 form.addEventListener("submit", async event => {
-
   event.preventDefault();
 
   const dados = {
-
-    nome:
-      document.getElementById("nome").value,
-
-    preco:
-      Number(
-        document.getElementById("preco").value
-      ),
-
-    estoque:
-      Number(
-        document.getElementById("estoque").value
-      ),
-
-    estoque_minimo:
-      Number(
-        document.getElementById("estoque_minimo").value
-      )
+    nome: document.getElementById("nome").value,
+    preco: Number(document.getElementById("preco").value),
+    estoque: Number(document.getElementById("estoque").value),
+    estoque_minimo: Number(document.getElementById("estoque_minimo").value)
   };
 
   try {
+    const response = await fetch(`${API}/produtos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados)
+    });
 
-    const response = await fetch(
-      `${API}/produtos`,
-      {
-        method: "POST",
+    const resultado = await response.json();
+    if (!response.ok) throw new Error(resultado.erro || "Erro ao cadastrar");
 
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify(dados)
-      }
-    );
-
-    const resultado =
-      await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        resultado.erro ||
-        "Erro ao cadastrar"
-      );
-    }
-
-    mensagem.textContent =
-      "Produto cadastrado com sucesso!";
-
-    mensagem.style.color =
-      "green";
-
+    mensagem.textContent = "Produto cadastrado com sucesso!";
+    mensagem.style.color = "green";
     form.reset();
-
-    await carregarProdutos();
-
+    await Promise.all([carregarProdutos(), carregarHistorico()]);
   } catch (error) {
-
-    mensagem.textContent =
-      error.message;
-
-    mensagem.style.color =
-      "red";
+    mensagem.textContent = error.message;
+    mensagem.style.color = "red";
   }
-
 });
 
 carregarProdutos();
