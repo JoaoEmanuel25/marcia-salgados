@@ -1,4 +1,5 @@
 import os
+import time
 from decimal import Decimal, InvalidOperation
 from flask import Flask, jsonify, request
 import psycopg2
@@ -8,11 +9,11 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "db"),
+    "host": os.getenv("DB_HOST", "postgres"),
     "port": int(os.getenv("DB_PORT", "5432")),
-    "dbname": os.getenv("POSTGRES_DB", "appdb"),
-    "user": os.getenv("POSTGRES_USER", "user"),
-    "password": os.getenv("POSTGRES_PASSWORD", "password"),
+    "dbname": os.getenv("POSTGRES_DB", os.getenv("DB_NAME", "appdb")),
+    "user": os.getenv("POSTGRES_USER", os.getenv("DB_USER", "user")),
+    "password": os.getenv("POSTGRES_PASSWORD", os.getenv("DB_PASSWORD", "password")),
 }
 
 connection_pool = None
@@ -22,6 +23,9 @@ def get_pool():
     if connection_pool is None:
         connection_pool = pool.SimpleConnectionPool(1, 10, **DB_CONFIG)
     return connection_pool
+
+def get_connection():
+    return get_pool().getconn()
 
 def json_error(message, status=400):
     return jsonify({"erro": message}), status
@@ -49,6 +53,44 @@ def validar_produto(data):
         return "Estoque e estoque mínimo não podem ser negativos."
     return None
 
+def preparar_banco():
+    sql = """
+    CREATE TABLE IF NOT EXISTS produtos (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(100) NOT NULL,
+        preco NUMERIC(10,2) NOT NULL CHECK (preco > 0),
+        estoque INTEGER NOT NULL DEFAULT 0 CHECK (estoque >= 0),
+        estoque_minimo INTEGER NOT NULL DEFAULT 0 CHECK (estoque_minimo >= 0),
+        criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS movimentacoes (
+        id SERIAL PRIMARY KEY,
+        produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+        tipo VARCHAR(7) NOT NULL CHECK (tipo IN ('ENTRADA', 'SAIDA')),
+        quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+        estoque_anterior INTEGER NOT NULL,
+        estoque_posterior INTEGER NOT NULL,
+        motivo VARCHAR(200),
+        pedido_id INTEGER,
+        criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    """
+    for tentativa in range(10):
+        conn = None
+        try:
+            conn = psycopg2.connect(**DB_CONFIG)
+            with conn.cursor() as cur:
+                cur.execute(sql)
+            conn.commit()
+            conn.close()
+            return
+        except psycopg2.Error:
+            if conn:
+                conn.close()
+            if tentativa == 9:
+                raise
+            time.sleep(2)
+
 @app.get("/")
 def home():
     return jsonify({"mensagem": "API Marcia Salgados funcionando", "linguagem": "Python/Flask"})
@@ -57,7 +99,7 @@ def home():
 def health():
     conn = None
     try:
-        conn = get_pool().getconn()
+        conn = get_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
         return jsonify({"status": "ok", "banco": "conectado"})
@@ -71,7 +113,7 @@ def health():
 def listar_produtos():
     conn = None
     try:
-        conn = get_pool().getconn()
+        conn = get_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT id, nome, preco, estoque, estoque_minimo,
@@ -97,7 +139,7 @@ def cadastrar_produto():
     estoque_minimo = int(data.get("estoque_minimo", 0))
     conn = None
     try:
-        conn = get_pool().getconn()
+        conn = get_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """INSERT INTO produtos (nome, preco, estoque, estoque_minimo)
@@ -135,7 +177,7 @@ def movimentar_estoque():
         return json_error("O motivo deve ter no máximo 200 caracteres.")
     conn = None
     try:
-        conn = get_pool().getconn()
+        conn = get_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM produtos WHERE id = %s FOR UPDATE", (produto_id,))
             produto = cur.fetchone()
@@ -155,12 +197,11 @@ def movimentar_estoque():
                 (produto_id, tipo, quantidade, anterior, novo, motivo or None, pedido_id),
             )
         conn.commit()
-        alerta = novo <= produto["estoque_minimo"]
         return jsonify({
             "mensagem": "Movimentação registrada com sucesso.",
             "estoque_anterior": anterior,
             "estoque_atual": novo,
-            "estoque_baixo": alerta,
+            "estoque_baixo": novo <= produto["estoque_minimo"],
         }), 201
     except psycopg2.Error:
         if conn:
@@ -174,7 +215,7 @@ def movimentar_estoque():
 def listar_movimentacoes():
     conn = None
     try:
-        conn = get_pool().getconn()
+        conn = get_connection()
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT m.id, m.tipo, m.quantidade, m.estoque_anterior,
@@ -201,4 +242,5 @@ def metodo_nao_permitido(_):
     return json_error("Método HTTP não permitido para esta rota.", 405)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    preparar_banco()
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "3000")), debug=False)
