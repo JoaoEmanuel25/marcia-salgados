@@ -16,7 +16,7 @@ body {
 }
 
 .header {
-  height: 76px;
+  min-height: 92px;
   background: #ffffff;
   display: flex;
   align-items: center;
@@ -31,28 +31,13 @@ body {
 .logo {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.logo > span {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: #8b1e2d;
-  color: white;
-  font-weight: bold;
-}
-
-.logo div {
-  display: flex;
-  flex-direction: column;
-}
-
-.logo small {
-  color: #777;
-  font-size: 11px;
+.logo-image {
+  width: 125px;
+  height: 78px;
+  object-fit: contain;
+  display: block;
 }
 
 nav {
@@ -75,11 +60,7 @@ nav a:hover {
   display: flex;
   align-items: center;
   padding: 80px 7%;
-  background: linear-gradient(
-    135deg,
-    #fff 0%,
-    #fff5f5 100%
-  );
+  background: linear-gradient(135deg, #fff 0%, #fff5f5 100%);
 }
 
 .hero-content {
@@ -398,28 +379,10 @@ footer span {
 }
 
 @media (max-width: 800px) {
-
-  nav {
-    display: none;
-  }
-
-  .stats,
-  .products,
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hero {
-    min-height: 500px;
-  }
-
-  .buttons {
-    flex-direction: column;
-  }
-
-  footer {
-    flex-direction: column;
-    gap: 10px;
-  }
-
+  nav { display: none; }
+  .stats, .products, .form-grid { grid-template-columns: 1fr; }
+  .hero { min-height: 500px; }
+  .buttons { flex-direction: column; }
+  footer { flex-direction: column; gap: 10px; }
+  .logo-image { width: 110px; height: 72px; }
 }
