@@ -57,6 +57,54 @@ Health check:
 
 http://localhost:3000/health
 
+## Verificação do banco de dados
+
+O banco PostgreSQL pode ser verificado diretamente pelo container para confirmar que os dados enviados pelo sistema estão sendo armazenados corretamente.
+
+Com os containers em execução, abra o PostgreSQL pelo PowerShell:
+
+```bash
+docker exec -it postgres_db psql -U user -d appdb
+```
+
+Para consultar os produtos cadastrados:
+
+```sql
+SELECT * FROM produtos ORDER BY id DESC;
+```
+
+Para consultar o histórico de entradas e saídas:
+
+```sql
+SELECT * FROM movimentacoes ORDER BY id DESC;
+```
+
+Também é possível consultar as movimentações junto ao nome do produto:
+
+```sql
+SELECT
+    m.id,
+    p.nome AS produto,
+    m.tipo,
+    m.quantidade,
+    m.estoque_anterior,
+    m.estoque_posterior,
+    m.motivo,
+    m.pedido_id,
+    m.criado_em
+FROM movimentacoes m
+JOIN produtos p ON p.id = m.produto_id
+ORDER BY m.id DESC;
+```
+
+Para sair do PostgreSQL:
+
+```sql
+\q
+```
+
+Esse procedimento permite demonstrar no vídeo que o cadastro e as movimentações realizados pela interface realmente são processados pelo backend Python/Flask e persistidos no PostgreSQL.
+
 ## Testes
 
 ```bash
@@ -75,7 +123,8 @@ Os testes verificam a rota inicial e validações de dados do backend.
 4. Registre uma entrada e mostre o saldo sendo atualizado.
 5. Registre uma saída e mostre o novo saldo e o histórico.
 6. Tente retirar uma quantidade maior que o estoque e mostre o tratamento do erro.
-7. Explique: “o formulário envia os dados, a API Python processa e valida, o PostgreSQL armazena e a interface apresenta o resultado”.
+7. Abra o PostgreSQL pelo comando `docker exec -it postgres_db psql -U user -d appdb` e execute `SELECT * FROM produtos;` e `SELECT * FROM movimentacoes;` para comprovar a persistência dos dados.
+8. Explique: “o formulário envia os dados, a API Python processa e valida, o PostgreSQL armazena e a interface apresenta o resultado”.
 
 ## Kubernetes
 
