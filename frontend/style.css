@@ -294,6 +294,63 @@ input:focus {
   outline: 2px solid #8b1e2d;
 }
 
+/* Tooltips de ajuda contextual */
+.tooltip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: #8b1e2d;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+}
+
+.tooltip-text {
+  position: absolute;
+  z-index: 200;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  width: 260px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #171717;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 5px);
+  transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
+}
+
+.tooltip-text::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  border: 6px solid transparent;
+  border-top-color: #171717;
+  transform: translateX(-50%);
+}
+
+.tooltip:hover .tooltip-text,
+.tooltip:focus .tooltip-text {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
 .history {
   display: flex;
   flex-direction: column;
