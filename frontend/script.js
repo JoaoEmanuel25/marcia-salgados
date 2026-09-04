@@ -11,6 +11,23 @@ function escapar(texto) {
   return div.innerHTML;
 }
 
+function formatarMoeda(valor) {
+  return Number(valor).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+}
+
+function formatarData(valor) {
+  if (!valor) return "Data não informada";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(valor));
+}
+
 async function movimentarEstoque(produtoId, formulario) {
   const retorno = formulario.querySelector(".movement-message");
   const dados = Object.fromEntries(new FormData(formulario));
@@ -26,7 +43,7 @@ async function movimentarEstoque(produtoId, formulario) {
     const resultado = await response.json();
     if (!response.ok) throw new Error(resultado.erro || "Erro ao movimentar estoque");
 
-    retorno.textContent = resultado.mensagem + " Novo estoque: " + resultado.estoque_atual;
+    retorno.textContent = `Movimentação concluída. Novo estoque: ${resultado.estoque_atual}.`;
     retorno.className = "movement-message success";
     formulario.reset();
     await Promise.all([carregarProdutos(), carregarHistorico()]);
@@ -52,20 +69,36 @@ async function carregarProdutos() {
     document.getElementById("estoqueBaixo").textContent = estoqueBaixo.length;
 
     if (produtos.length === 0) {
-      statusElement.textContent = "Nenhum produto cadastrado.";
+      statusElement.textContent = "Nenhum produto cadastrado";
+      lista.innerHTML = `
+        <div class="empty-state">
+          <span aria-hidden="true">+</span>
+          <strong>Seu catálogo está vazio</strong>
+          <p>Cadastre o primeiro produto para começar a controlar o estoque.</p>
+          <a href="#cadastro" class="button primary">Cadastrar produto</a>
+        </div>
+      `;
       return;
     }
 
-    statusElement.textContent = `${produtos.length} produto(s) encontrado(s).`;
+    statusElement.textContent = `${produtos.length} ${produtos.length === 1 ? "produto cadastrado" : "produtos cadastrados"}`;
 
     produtos.forEach(produto => {
+      const estoqueBaixo = Number(produto.estoque) <= Number(produto.estoque_minimo);
       const card = document.createElement("article");
       card.className = "product";
       card.innerHTML = `
-        <h3>${escapar(produto.nome)}</h3>
-        <div class="price">R$ ${Number(produto.preco).toFixed(2)}</div>
-        <div class="stock">Estoque: <strong>${produto.estoque}</strong></div>
-        <div class="stock">Estoque mínimo: ${produto.estoque_minimo}</div>
+        <div class="product-content">
+          <div class="product-topline">
+            <h3>${escapar(produto.nome)}</h3>
+            <span class="stock-badge ${estoqueBaixo ? "low" : ""}">${estoqueBaixo ? "Estoque baixo" : "Disponível"}</span>
+          </div>
+          <div class="price">${formatarMoeda(produto.preco)}</div>
+          <div class="stock-info">
+            <div><span>Em estoque</span><strong>${produto.estoque}</strong></div>
+            <div><span>Mínimo</span><strong>${produto.estoque_minimo}</strong></div>
+          </div>
+        </div>
         <form class="movement-form">
           <label>Movimentar estoque</label>
           <div class="movement-grid">
@@ -75,7 +108,7 @@ async function carregarProdutos() {
             </select>
             <input name="quantidade" type="number" min="1" value="1" required aria-label="Quantidade">
           </div>
-          <input name="motivo" maxlength="200" placeholder="Motivo (ex.: venda ou produção)">
+          <input name="motivo" maxlength="200" placeholder="Motivo: venda, produção..." aria-label="Motivo da movimentação">
           <button class="button primary" type="submit">Confirmar movimentação</button>
           <p class="movement-message" aria-live="polite"></p>
         </form>
@@ -103,23 +136,32 @@ async function carregarHistorico() {
     container.innerHTML = "";
 
     if (movimentacoes.length === 0) {
-      container.textContent = "Nenhuma movimentação registrada.";
+      container.innerHTML = `
+        <div class="empty-state compact">
+          <strong>Nenhuma movimentação registrada</strong>
+          <p>As entradas e saídas aparecerão aqui.</p>
+        </div>
+      `;
       return;
     }
 
     movimentacoes.forEach(mov => {
       const div = document.createElement("div");
       div.className = "history-item";
-      const tipoClasse = mov.tipo === "ENTRADA" ? "entry" : "exit";
+      const entrada = mov.tipo === "ENTRADA";
+      const tipoClasse = entrada ? "entry" : "exit";
       div.innerHTML = `
-        <div>
-          <strong>${escapar(mov.produto)}</strong>
-          <div>${escapar(mov.motivo || "")}</div>
-          ${mov.pedido_id ? `<small>Pedido #${mov.pedido_id}</small>` : ""}
+        <div class="history-product">
+          <span class="history-symbol" aria-hidden="true">${entrada ? "+" : "−"}</span>
+          <div>
+            <strong>${escapar(mov.produto)}</strong>
+            <p>${escapar(mov.motivo || "Sem motivo informado")}</p>
+            <small>${formatarData(mov.criado_em)}${mov.pedido_id ? ` · Pedido #${mov.pedido_id}` : ""}</small>
+          </div>
         </div>
-        <div class="${tipoClasse}">
-          <strong>${mov.tipo}</strong>
-          <div>${mov.quantidade} unidade(s)</div>
+        <div class="movement-summary ${tipoClasse}">
+          <strong>${entrada ? "Entrada" : "Saída"} de ${mov.quantidade}</strong>
+          <p>${mov.quantidade === 1 ? "unidade" : "unidades"}</p>
           <small>${mov.estoque_anterior} → ${mov.estoque_posterior}</small>
         </div>
       `;
@@ -151,12 +193,12 @@ form.addEventListener("submit", async event => {
     if (!response.ok) throw new Error(resultado.erro || "Erro ao cadastrar");
 
     mensagem.textContent = "Produto cadastrado com sucesso!";
-    mensagem.style.color = "green";
+    mensagem.className = "success";
     form.reset();
     await Promise.all([carregarProdutos(), carregarHistorico()]);
   } catch (error) {
     mensagem.textContent = error.message;
-    mensagem.style.color = "red";
+    mensagem.className = "error";
   }
 });
 
