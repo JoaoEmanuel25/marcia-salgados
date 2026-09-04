@@ -25,6 +25,14 @@ Sistema de gestão e publicidade para a empresa Marcia Salgados, com foco em con
 - Associação de saída ao pedido
 - Alertas de estoque mínimo
 - Validação e tratamento de erros
+- Painel responsivo com indicadores de estoque
+- Identificação visual de produtos abaixo do estoque mínimo
+
+## Interface
+
+A interface foi organizada como um painel de trabalho, com resumo do estoque, catálogo de produtos, formulário de cadastro e histórico de movimentações. O visual é responsivo e mantém as principais ações acessíveis em computadores e celulares.
+
+O roteiro completo, com falas divididas entre os integrantes e passos da demonstração, está em [`ROTEIRO_APRESENTACAO.md`](ROTEIRO_APRESENTACAO.md).
 
 ## Integração implementada
 
