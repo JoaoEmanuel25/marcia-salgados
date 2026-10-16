@@ -4,6 +4,9 @@ const lista = document.getElementById("lista");
 const statusElement = document.getElementById("status");
 const form = document.getElementById("produtoForm");
 const mensagem = document.getElementById("mensagem");
+const buscaProduto = document.getElementById("buscaProduto");
+const filtroEstoque = document.getElementById("filtroEstoque");
+let produtosCache = [];
 
 function escapar(texto) {
   const div = document.createElement("div");
@@ -16,6 +19,13 @@ function formatarMoeda(valor) {
     style: "currency",
     currency: "BRL"
   });
+}
+
+function normalizarPreco(valor) {
+  const texto = String(valor ?? "").trim().replace(/\\s/g, "").replace(/R\\$/i, "");
+  if (!texto) return NaN;
+  if (texto.includes(",") && texto.includes(".")) return Number(texto.replace(/\\./g, "").replace(",", "."));
+  return Number(texto.replace(",", "."));
 }
 
 function formatarData(valor) {
@@ -59,6 +69,17 @@ async function carregarProdutos() {
     if (!response.ok) throw new Error("Erro ao consultar API");
 
     const produtos = await response.json();
+    produtosCache = produtos;
+    renderizarProdutos();
+  } catch (error) {
+    console.error(error);
+    statusElement.textContent = "Não foi possível conectar com o backend. Verifique se os serviços estão ativos.";
+    lista.innerHTML = `<div class="empty-state"><strong>Não foi possível carregar os produtos</strong><p>Confira a conexão e tente novamente.</p><button class="button outline" type="button" id="tentarNovamente">Tentar novamente</button></div>`;
+    document.getElementById("tentarNovamente")?.addEventListener("click", carregarProdutos);
+  }
+}
+
+function renderizarProdutos() {
     lista.innerHTML = "";
     document.getElementById("totalProdutos").textContent = produtos.length;
 
@@ -68,7 +89,7 @@ async function carregarProdutos() {
     document.getElementById("estoqueTotal").textContent = estoqueTotal;
     document.getElementById("estoqueBaixo").textContent = estoqueBaixo.length;
 
-    if (produtos.length === 0) {
+    if (produtosCache.length === 0) {
       statusElement.textContent = "Nenhum produto cadastrado";
       lista.innerHTML = `
         <div class="empty-state">
@@ -81,9 +102,20 @@ async function carregarProdutos() {
       return;
     }
 
-    statusElement.textContent = `${produtos.length} ${produtos.length === 1 ? "produto cadastrado" : "produtos cadastrados"}`;
+    const termo = (buscaProduto?.value || "").trim().toLocaleLowerCase("pt-BR");
+    const filtro = filtroEstoque?.value || "todos";
+    const filtrados = produtosCache.filter(produto => {
+      const nomeCorresponde = produto.nome.toLocaleLowerCase("pt-BR").includes(termo);
+      const baixo = Number(produto.estoque) <= Number(produto.estoque_minimo);
+      return nomeCorresponde && (filtro === "todos" || (filtro === "baixo" && baixo) || (filtro === "disponivel" && !baixo));
+    });
+    statusElement.textContent = `${filtrados.length} de ${produtosCache.length} produto(s)`;
+    if (filtrados.length === 0) {
+      lista.innerHTML = `<div class="empty-state compact"><strong>Nenhum produto encontrado</strong><p>Altere a busca ou o filtro selecionado.</p></div>`;
+      return;
+    }
 
-    produtos.forEach(produto => {
+    filtrados.forEach(produto => {
       const estoqueBaixo = Number(produto.estoque) <= Number(produto.estoque_minimo);
       const card = document.createElement("article");
       card.className = "product";
@@ -94,6 +126,7 @@ async function carregarProdutos() {
             <span class="stock-badge ${estoqueBaixo ? "low" : ""}">${estoqueBaixo ? "Estoque baixo" : "Disponível"}</span>
           </div>
           <div class="price">${formatarMoeda(produto.preco)}</div>
+          <button class="button outline edit-product" type="button" data-id="${produto.id}">Editar produto</button>
           <div class="stock-info">
             <div><span>Em estoque</span><strong>${produto.estoque}</strong></div>
             <div><span>Mínimo</span><strong>${produto.estoque_minimo}</strong></div>
@@ -114,15 +147,41 @@ async function carregarProdutos() {
         </form>
       `;
 
+      card.querySelector(".edit-product").addEventListener("click", () => editarProduto(produto));
       card.querySelector(".movement-form").addEventListener("submit", event => {
         event.preventDefault();
         movimentarEstoque(produto.id, event.currentTarget);
       });
       lista.appendChild(card);
     });
+}
+
+async function editarProduto(produto) {
+  const nome = prompt("Nome do produto:", produto.nome);
+  if (nome === null) return;
+  const precoTexto = prompt("Preço unitário (ex.: 8,50):", String(produto.preco).replace(".", ","));
+  if (precoTexto === null) return;
+  const estoqueMinimoTexto = prompt("Estoque mínimo:", String(produto.estoque_minimo));
+  if (estoqueMinimoTexto === null) return;
+  const preco = normalizarPreco(precoTexto);
+  const estoque_minimo = Number(estoqueMinimoTexto);
+  if (!nome.trim() || !Number.isFinite(preco) || preco <= 0 || !Number.isInteger(estoque_minimo) || estoque_minimo < 0) {
+    alert("Dados inválidos. Confira nome, preço positivo e estoque mínimo inteiro não negativo.");
+    return;
+  }
+  try {
+    const response = await fetch(`${API}/produtos/${produto.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nome.trim(), preco, estoque: produto.estoque, estoque_minimo })
+    });
+    const resultado = await response.json();
+    if (!response.ok) throw new Error(resultado.erro || "Não foi possível atualizar o produto.");
+    mensagem.textContent = resultado.mensagem;
+    mensagem.className = "success";
+    await carregarProdutos();
   } catch (error) {
-    console.error(error);
-    statusElement.textContent = "Não foi possível conectar com o backend.";
+    alert(error.message);
   }
 }
 
@@ -177,10 +236,16 @@ form.addEventListener("submit", async event => {
 
   const dados = {
     nome: document.getElementById("nome").value,
-    preco: Number(document.getElementById("preco").value),
+    preco: normalizarPreco(document.getElementById("preco").value),
     estoque: Number(document.getElementById("estoque").value),
     estoque_minimo: Number(document.getElementById("estoque_minimo").value)
   };
+
+  if (!dados.nome.trim() || !Number.isFinite(dados.preco) || dados.preco <= 0 || !Number.isInteger(dados.estoque) || dados.estoque < 0 || !Number.isInteger(dados.estoque_minimo) || dados.estoque_minimo < 0) {
+    mensagem.textContent = "Confira os campos: nome obrigatório, preço positivo e estoques inteiros não negativos.";
+    mensagem.className = "error";
+    return;
+  }
 
   try {
     const response = await fetch(`${API}/produtos`, {
@@ -204,3 +269,7 @@ form.addEventListener("submit", async event => {
 
 carregarProdutos();
 carregarHistorico();
+
+
+buscaProduto?.addEventListener("input", renderizarProdutos);
+filtroEstoque?.addEventListener("change", renderizarProdutos);
