@@ -464,3 +464,16 @@ footer > span { color: #bbaeb0; font-size: 13px; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* Ferramentas do catálogo e dicas de contexto */
+.catalog-tools { display: flex; align-items: end; gap: 16px; margin: 0 0 18px; }
+.catalog-tools label { flex: 1; max-width: 420px; }
+.catalog-tools label + label { flex: 0 0 250px; }
+.catalog-tools input, .catalog-tools select { display: block; margin-top: 6px; }
+.edit-product { min-height: 36px; margin-top: 12px; padding: 7px 12px; font-size: 12px; }
+.tooltip { position: relative; display: inline-grid; width: 18px; height: 18px; place-items: center; margin-left: 4px; border: 1px solid #bca9ac; border-radius: 50%; color: var(--wine-700); cursor: help; font-size: 11px; font-weight: 700; }
+.tooltip::after { position: absolute; z-index: 20; bottom: calc(100% + 9px); left: 50%; width: 230px; padding: 10px 12px; border-radius: 9px; background: var(--wine-950); color: white; content: attr(data-tooltip); font-size: 12px; font-weight: 500; line-height: 1.45; opacity: 0; pointer-events: none; transform: translate(-50%, 4px); transition: opacity 150ms ease, transform 150ms ease; }
+.tooltip:hover::after, .tooltip:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+.tooltip:focus-visible { outline: 2px solid var(--wine-700); outline-offset: 3px; }
+@media (max-width: 720px) { .catalog-tools { align-items: stretch; flex-direction: column; } .catalog-tools label, .catalog-tools label + label { max-width: none; flex: auto; } }
