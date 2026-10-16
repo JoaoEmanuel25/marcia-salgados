@@ -164,3 +164,29 @@ kubectl get pods
 kubectl get services
 kubectl get deployments
 ```
+
+
+## Melhorias recentes
+
+- **Busca de produtos:** localiza itens pelo nome sem alterar os dados armazenados.
+- **Filtros de estoque:** permite exibir todos os produtos, somente os que atingiram o estoque mínimo ou somente os disponíveis acima do mínimo.
+- **Edição de produtos:** permite atualizar nome, preço e estoque mínimo pela interface. O saldo atual é preservado; alterações de saldo devem ser registradas pela movimentação para manter a rastreabilidade.
+- **Validação no frontend e backend:** confere nome obrigatório, preço positivo e quantidades inteiras não negativas. O backend continua sendo a validação definitiva.
+- **Preço em formato brasileiro:** o formulário aceita separador decimal por vírgula ou ponto, como `8,50` e `8.50`.
+- **Tooltips acessíveis:** dicas de contexto nos campos de nome, preço e estoque, disponíveis por mouse e foco do teclado.
+- **Inicialização mais confiável:** o Docker Compose verifica a disponibilidade do PostgreSQL antes de iniciar o backend e configura o endereço do backend para o proxy do frontend.
+
+### Como atualizar e testar
+
+Depois de obter as alterações:
+
+```powershell
+git pull
+docker compose config
+docker compose up -d --build
+docker compose ps
+```
+
+Abra http://localhost:8080 e teste a busca, o filtro de estoque, as dicas de contexto, a edição de um produto e uma movimentação de entrada ou saída. Confira a persistência no PostgreSQL seguindo a seção **Verificação do banco de dados** acima.
+
+> Observação: as funcionalidades devem ser validadas no ambiente local após a reconstrução dos containers. O módulo completo de pedidos, autenticação de usuários, exportação de relatórios e backup automatizado permanece como evolução futura.
