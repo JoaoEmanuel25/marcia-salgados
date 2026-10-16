@@ -194,6 +194,42 @@ def editar_produto(produto_id):
         if conn:
             get_pool().putconn(conn)
 
+@app.put("/produtos/<int:produto_id>")
+def editar_produto(produto_id):
+    data = request.get_json(silent=True)
+    erro = validar_produto(data)
+    if erro:
+        return json_error(erro, 400)
+
+    nome = str(data["nome"]).strip()
+    preco = Decimal(str(data["preco"])).quantize(Decimal("0.01"))
+    estoque_minimo = int(data.get("estoque_minimo", 0))
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """UPDATE produtos
+                   SET nome = %s, preco = %s, estoque_minimo = %s
+                   WHERE id = %s
+                   RETURNING id, nome, preco, estoque, estoque_minimo""",
+                (nome, preco, estoque_minimo, produto_id),
+            )
+            produto = cur.fetchone()
+        if not produto:
+            conn.rollback()
+            return json_error("Produto não encontrado.", 404)
+        conn.commit()
+        return jsonify({"mensagem": "Produto atualizado com sucesso.", "produto": produto})
+    except psycopg2.Error:
+        if conn:
+            conn.rollback()
+        return json_error("Não foi possível atualizar o produto no banco de dados.", 503)
+    finally:
+        if conn:
+            get_pool().putconn(conn)
+
+
 @app.post("/estoque/movimentacao")
 def movimentar_estoque():
     data = request.get_json(silent=True) or {}
