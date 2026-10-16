@@ -6,6 +6,8 @@ const form = document.getElementById("produtoForm");
 const mensagem = document.getElementById("mensagem");
 const buscaProduto = document.getElementById("buscaProduto");
 const filtroEstoque = document.getElementById("filtroEstoque");
+const buscaProduto = document.getElementById("buscaProduto");
+const filtroEstoque = document.getElementById("filtroEstoque");
 let produtosCache = [];
 
 function escapar(texto) {
@@ -19,6 +21,13 @@ function formatarMoeda(valor) {
     style: "currency",
     currency: "BRL"
   });
+}
+
+function normalizarPreco(valor) {
+  const texto = String(valor ?? "").trim().replace(/\\s/g, "").replace(/R\\$/i, "");
+  if (!texto) return NaN;
+  if (texto.includes(",") && texto.includes(".")) return Number(texto.replace(/\\./g, "").replace(",", "."));
+  return Number(texto.replace(",", "."));
 }
 
 function normalizarPreco(valor) {
@@ -126,6 +135,7 @@ function renderizarProdutos() {
             <span class="stock-badge ${estoqueBaixo ? "low" : ""}">${estoqueBaixo ? "Estoque baixo" : "Disponível"}</span>
           </div>
           <div class="price">${formatarMoeda(produto.preco)}</div>
+          <button class="button outline edit-product" type="button">Editar produto</button>
           <button class="button outline edit-product" type="button" data-id="${produto.id}">Editar produto</button>
           <div class="stock-info">
             <div><span>Em estoque</span><strong>${produto.estoque}</strong></div>
@@ -148,6 +158,28 @@ function renderizarProdutos() {
       `;
 
       card.querySelector(".edit-product").addEventListener("click", () => editarProduto(produto));
+      card.querySelector(".edit-product").addEventListener("click", async () => {
+        const nome = prompt("Nome do produto:", produto.nome);
+        if (nome === null) return;
+        const precoTexto = prompt("Preço unitário (ex.: 8,50):", String(produto.preco).replace(".", ","));
+        if (precoTexto === null) return;
+        const minimoTexto = prompt("Estoque mínimo:", String(produto.estoque_minimo));
+        if (minimoTexto === null) return;
+        const preco = normalizarPreco(precoTexto);
+        const estoque_minimo = Number(minimoTexto);
+        if (!nome.trim() || !Number.isFinite(preco) || preco <= 0 || !Number.isInteger(estoque_minimo) || estoque_minimo < 0) {
+          alert("Dados inválidos. Confira o nome, o preço positivo e o estoque mínimo inteiro não negativo.");
+          return;
+        }
+        try {
+          const resp = await fetch(`${API}/produtos/${produto.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: nome.trim(), preco, estoque: produto.estoque, estoque_minimo }) });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.erro || "Não foi possível atualizar o produto.");
+          mensagem.textContent = data.mensagem;
+          mensagem.className = "success";
+          await carregarProdutos();
+        } catch (error) { alert(error.message); }
+      });
       card.querySelector(".movement-form").addEventListener("submit", event => {
         event.preventDefault();
         movimentarEstoque(produto.id, event.currentTarget);
@@ -247,6 +279,12 @@ form.addEventListener("submit", async event => {
     return;
   }
 
+  if (!dados.nome.trim() || !Number.isFinite(dados.preco) || dados.preco <= 0 || !Number.isInteger(dados.estoque) || dados.estoque < 0 || !Number.isInteger(dados.estoque_minimo) || dados.estoque_minimo < 0) {
+    mensagem.textContent = "Confira os campos: nome obrigatório, preço positivo e estoques inteiros não negativos.";
+    mensagem.className = "error";
+    return;
+  }
+
   try {
     const response = await fetch(`${API}/produtos`, {
       method: "POST",
@@ -273,3 +311,7 @@ carregarHistorico();
 
 buscaProduto?.addEventListener("input", renderizarProdutos);
 filtroEstoque?.addEventListener("change", renderizarProdutos);
+
+
+buscaProduto?.addEventListener("input", carregarProdutos);
+filtroEstoque?.addEventListener("change", carregarProdutos);
